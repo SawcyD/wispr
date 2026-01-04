@@ -282,6 +282,33 @@ inventory.listenForChange(pathOf("items"), (newItems) => {
 });
 ```
 
+## Future Implementations
+
+### Blink Integration
+
+Planning to integrate [Blink](https://1axen.github.io/blink/) for even better performance and security:
+
+- **Enhanced Compression**: Blink's IDL compiler will provide more efficient serialization
+- **Better Security**: Harder to snoop on network traffic due to Blink's compression
+- **Type Safety**: Blink's schema validation will add an extra layer of type checking
+- **Lower Bandwidth**: Further reduction in network usage compared to standard RemoteEvents
+
+This integration will be opt-in and backward compatible with the current implementation.
+
+## Changelog
+
+### [1.0.3] - 2025-01-04
+- **Added**: Comprehensive error handling and input validation across all modules and classes
+- **Added**: Detailed error messages for better debugging
+- **Added**: Parameter validation for all public APIs
+- **Added**: Type checking and validation for paths, operations, tokens, and scopes
+
+### [1.0.2] - 2025-01-04
+- **Fixed**: Added missing exports for `getRemoteFunction`, `getRemoteEvent`, `WISPR_REMOTES`, and `initializeRemotes` from `WisprRemotes`
+
+### [1.0.1] - 2025-01-03
+- Initial release
+
 ## License
 
 ISC License

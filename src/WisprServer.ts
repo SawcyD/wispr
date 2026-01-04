@@ -45,6 +45,31 @@ export class WisprServerNode<T = unknown> {
 	private version: number;
 
 	constructor(token: WisprToken<T>, scope: WisprScope, initialState: T) {
+		if (!token) {
+			error("[WisprServerNode] Token cannot be nil");
+		}
+		if (!scope || typeOf(scope) !== "table") {
+			error("[WisprServerNode] Scope cannot be nil and must be a table");
+		}
+		if (!("kind" in scope)) {
+			error("[WisprServerNode] Scope must have a 'kind' property");
+		}
+		const scopeKind = scope.kind;
+		if (scopeKind === "player") {
+			if (!("player" in scope) || !scope.player) {
+				error("[WisprServerNode] Scope with kind 'player' must have a player");
+			}
+		} else if (scopeKind === "players") {
+			if (!("players" in scope) || !typeIs(scope.players, "table")) {
+				error("[WisprServerNode] Scope with kind 'players' must have a players array");
+			}
+		} else if (scopeKind !== "all") {
+			error(`[WisprServerNode] Invalid scope kind: ${scopeKind}`);
+		}
+		if (initialState === undefined) {
+			error("[WisprServerNode] Initial state cannot be undefined");
+		}
+
 		this.token = token;
 		this.scope = scope;
 		this.state = initialState;
@@ -67,9 +92,19 @@ export class WisprServerNode<T = unknown> {
 
 	/**
 	 * Apply a patch operation and increment version.
+	 *
+	 * @param operation - Patch operation to apply
+	 * @throws Error if operation is invalid
 	 */
 	public applyOperation(operation: WisprPatchOp): void {
-		applyPatchOperation(this.state as Record<string | number, unknown>, operation);
+		if (!operation || typeOf(operation) !== "table") {
+			error("[WisprServerNode] Operation cannot be nil and must be a table");
+		}
+		try {
+			applyPatchOperation(this.state as Record<string | number, unknown>, operation);
+		} catch (err) {
+			error(`[WisprServerNode] Failed to apply operation: ${err}`);
+		}
 		this.version++;
 	}
 
@@ -86,8 +121,15 @@ export class WisprServerNode<T = unknown> {
 
 	/**
 	 * Check if a player should see this node based on scope.
+	 *
+	 * @param player - Player to check
+	 * @returns true if player should receive updates
+	 * @throws Error if player is invalid
 	 */
 	public shouldReplicateTo(player: Player): boolean {
+		if (!player) {
+			error("[WisprServerNode] Player cannot be nil");
+		}
 		if (this.scope.kind === "all") {
 			return true;
 		} else if (this.scope.kind === "player") {
@@ -121,19 +163,35 @@ class WisprServerRegistry {
 	 * @param scope - Replication scope
 	 * @param initialState - Initial state value
 	 * @returns The created node
+	 * @throws Error if token is invalid or node already exists
 	 */
 	public createNode<T>(token: WisprToken<T>, scope: WisprScope, initialState: T): WisprServerNode<T> {
+		if (!token) {
+			error("[WisprServer] Token cannot be nil");
+		}
+		if (!scope || typeOf(scope) !== "table") {
+			error("[WisprServer] Scope cannot be nil and must be a table");
+		}
 		if (this.nodes.has(token.id)) {
 			error(`[WisprServer] Node with token ${token.id} already exists`);
 		}
 
-		const node = new WisprServerNode(token, scope, initialState);
-		this.nodes.set(token.id, node);
+		let node: WisprServerNode<T>;
+		try {
+			node = new WisprServerNode(token, scope, initialState);
+		} catch (err) {
+			error(`[WisprServer] Failed to create node: ${err}`);
+		}
+		this.nodes.set(token.id, node!);
 
 		// Send create message to all relevant clients
-		this.broadcastCreate(node);
+		try {
+			this.broadcastCreate(node!);
+		} catch (err) {
+			warn(`[WisprServer] Failed to broadcast create message: ${err}`);
+		}
 
-		return node;
+		return node!;
 	}
 
 	/**
@@ -172,15 +230,26 @@ class WisprServerRegistry {
 	 *
 	 * @param token - Token of node to patch
 	 * @param operation - Patch operation to apply
+	 * @throws Error if token or operation is invalid, or node doesn't exist
 	 */
 	public patchNode(token: WisprToken<unknown>, operation: WisprPatchOp): void {
+		if (!token) {
+			error("[WisprServer] Token cannot be nil");
+		}
+		if (!operation || typeOf(operation) !== "table") {
+			error("[WisprServer] Operation cannot be nil and must be a table");
+		}
 		const node = this.nodes.get(token.id);
 		if (!node) {
 			error(`[WisprServer] Cannot patch non-existent node: ${token.id}`);
 		}
 
 		// Apply operation (increments version)
-		node!.applyOperation(operation);
+		try {
+			node!.applyOperation(operation);
+		} catch (err) {
+			error(`[WisprServer] Failed to apply operation to node ${token.id}: ${err}`);
+		}
 
 		// Create patch message
 		const patch: WisprPatch = {
@@ -190,7 +259,11 @@ class WisprServerRegistry {
 		};
 
 		// Broadcast to relevant clients
-		this.broadcastPatch(node!, patch);
+		try {
+			this.broadcastPatch(node!, patch);
+		} catch (err) {
+			warn(`[WisprServer] Failed to broadcast patch: ${err}`);
+		}
 	}
 
 	/**
@@ -198,16 +271,30 @@ class WisprServerRegistry {
 	 *
 	 * @param token - Token of node to patch
 	 * @param operations - Patch operations to apply
+	 * @throws Error if token or operations are invalid, or node doesn't exist
 	 */
 	public patchNodeMultiple(token: WisprToken<unknown>, operations: readonly WisprPatchOp[]): void {
+		if (!token) {
+			error("[WisprServer] Token cannot be nil");
+		}
+		if (!operations || !typeIs(operations, "table")) {
+			error("[WisprServer] Operations must be a table/array");
+		}
+		if (operations.size() === 0) {
+			error("[WisprServer] Operations array cannot be empty");
+		}
 		const node = this.nodes.get(token.id);
 		if (!node) {
 			error(`[WisprServer] Cannot patch non-existent node: ${token.id}`);
 		}
 
 		// Apply all operations
-		for (const operation of operations) {
-			node!.applyOperation(operation);
+		for (const [i, operation] of ipairs(operations)) {
+			try {
+				node!.applyOperation(operation);
+			} catch (err) {
+				error(`[WisprServer] Failed to apply operation ${i} to node ${token.id}: ${err}`);
+			}
 		}
 
 		// Create patch message
@@ -218,7 +305,11 @@ class WisprServerRegistry {
 		};
 
 		// Broadcast to relevant clients
-		this.broadcastPatch(node!, patch);
+		try {
+			this.broadcastPatch(node!, patch);
+		} catch (err) {
+			warn(`[WisprServer] Failed to broadcast patch: ${err}`);
+		}
 	}
 
 	/**
@@ -278,8 +369,16 @@ class WisprServerRegistry {
 
 	/**
 	 * Handle initial data request from client.
+	 *
+	 * @param player - Player requesting initial data
+	 * @returns Array of create messages for nodes this player should see
+	 * @throws Error if player is invalid
 	 */
 	private handleInitialDataRequest(player: Player): WisprCreateMessage[] {
+		if (!player) {
+			error("[WisprServer] Player cannot be nil");
+		}
+
 		// Rate limit check
 		const identifier = tostring(player.UserId);
 		if (!this.rateLimiter.canRequest(identifier)) {
@@ -290,11 +389,15 @@ class WisprServerRegistry {
 		// Collect all nodes this player should see
 		const messages: WisprCreateMessage[] = [];
 		for (const [, node] of this.nodes) {
-			if (node.shouldReplicateTo(player)) {
-				messages.push({
-					tokenId: node.token.id,
-					snapshot: node.createSnapshot(),
-				});
+			try {
+				if (node.shouldReplicateTo(player)) {
+					messages.push({
+						tokenId: node.token.id,
+						snapshot: node.createSnapshot(),
+					});
+				}
+			} catch (err) {
+				warn(`[WisprServer] Error checking replication for node ${node.token.id}: ${err}`);
 			}
 		}
 

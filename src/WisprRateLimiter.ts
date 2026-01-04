@@ -15,8 +15,15 @@ export class WisprRateLimiter {
 	 *
 	 * @param maxRequests - Maximum requests allowed
 	 * @param windowSeconds - Time window in seconds
+	 * @throws Error if parameters are invalid
 	 */
 	constructor(maxRequests: number, windowSeconds: number) {
+		if (typeOf(maxRequests) !== "number" || maxRequests < 1) {
+			error("[WisprRateLimiter] maxRequests must be a positive number");
+		}
+		if (typeOf(windowSeconds) !== "number" || windowSeconds <= 0) {
+			error("[WisprRateLimiter] windowSeconds must be a positive number");
+		}
 		this.maxRequests = maxRequests;
 		this.windowSeconds = windowSeconds;
 	}
@@ -26,8 +33,13 @@ export class WisprRateLimiter {
 	 *
 	 * @param identifier - Unique identifier (e.g., player userId)
 	 * @returns true if request is allowed, false if rate limited
+	 * @throws Error if identifier is invalid
 	 */
 	public canRequest(identifier: string): boolean {
+		if (typeOf(identifier) !== "string" || identifier === "") {
+			error("[WisprRateLimiter] identifier must be a non-empty string");
+		}
+
 		const now = tick();
 		const times = this.requestTimes.get(identifier) || [];
 		const windowStart = now - this.windowSeconds;
@@ -50,8 +62,12 @@ export class WisprRateLimiter {
 	 * Reset rate limit for a specific identifier.
 	 *
 	 * @param identifier - Identifier to reset
+	 * @throws Error if identifier is invalid
 	 */
 	public reset(identifier: string): void {
+		if (typeOf(identifier) !== "string") {
+			error("[WisprRateLimiter] identifier must be a string");
+		}
 		this.requestTimes.delete(identifier);
 	}
 

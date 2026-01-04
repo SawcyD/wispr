@@ -16,8 +16,12 @@ export class WisprSignal<T = void> {
 	 *
 	 * @param callback - Function to call when signal fires
 	 * @returns Disconnect function
+	 * @throws Error if callback is invalid
 	 */
 	public connect(callback: (value: T) => void): () => void {
+		if (typeOf(callback) !== "function") {
+			error("[WisprSignal] callback must be a function");
+		}
 		this.listeners.add(callback);
 		return () => {
 			this.listeners.delete(callback);

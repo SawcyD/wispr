@@ -39,6 +39,7 @@ class WisprClientRegistry {
 	 * Should be called once during client bootstrap.
 	 *
 	 * @returns Promise that resolves when initial data is received
+	 * @throws Error if initialization fails
 	 */
 	public async requestInitialData(): Promise<void> {
 		if (this.isInitialized) {
@@ -46,26 +47,40 @@ class WisprClientRegistry {
 			return;
 		}
 
-		const remoteFunction = getRemoteFunction(WISPR_REMOTES.REQUEST_INITIAL_DATA);
-		const [success, messages] = pcall(() => {
-			return remoteFunction.InvokeServer();
-		});
-
-		if (!success) {
-			warn(`[WisprClient] Failed to request initial data: ${messages}`);
-			return;
-		}
-
-		// Process initial create messages
-		if (typeIs(messages, "table")) {
-			const messageArray = messages as WisprMessage[];
-			for (const message of messageArray) {
-				this.handleMessage(message);
+		try {
+			const remoteFunction = getRemoteFunction(WISPR_REMOTES.REQUEST_INITIAL_DATA);
+			if (!remoteFunction) {
+				error("[WisprClient] Failed to get remote function");
 			}
-		}
 
-		this.isInitialized = true;
-		print("[WisprClient] Initialized");
+			const [success, messages] = pcall(() => {
+				return remoteFunction.InvokeServer();
+			});
+
+			if (!success) {
+				warn(`[WisprClient] Failed to request initial data: ${tostring(messages)}`);
+				return;
+			}
+
+			// Process initial create messages
+			if (typeIs(messages, "table")) {
+				const messageArray = messages as WisprMessage[];
+				for (const [i, message] of ipairs(messageArray)) {
+					try {
+						this.handleMessage(message);
+					} catch (err) {
+						warn(`[WisprClient] Error processing message ${i}: ${err}`);
+					}
+				}
+			} else {
+				warn(`[WisprClient] Received invalid initial data type: ${typeOf(messages as unknown)}`);
+			}
+
+			this.isInitialized = true;
+			print("[WisprClient] Initialized");
+		} catch (err) {
+			error(`[WisprClient] Failed to initialize: ${err}`);
+		}
 	}
 
 	/**
@@ -74,8 +89,13 @@ class WisprClientRegistry {
 	 *
 	 * @param token - Token to wait for
 	 * @returns Promise that resolves with the node
+	 * @throws Error if token is invalid
 	 */
 	public async waitForNode<T>(token: WisprToken<T>): Promise<WisprNode<T>> {
+		if (!token) {
+			error("[WisprClient] Token cannot be nil");
+		}
+
 		// Check if node already exists
 		const existing = this.nodes.get(token.id);
 		if (existing) {
@@ -83,14 +103,18 @@ class WisprClientRegistry {
 		}
 
 		// Wait for node creation
-		return new Promise<WisprNode<T>>((resolve) => {
+		return new Promise<WisprNode<T>>((resolve, reject) => {
 			let waiters = this.nodeWaiters.get(token.id);
 			if (!waiters) {
 				waiters = [];
 				this.nodeWaiters.set(token.id, waiters);
 			}
 			waiters.push((node) => {
-				resolve(node as WisprNode<T>);
+				if (node) {
+					resolve(node as WisprNode<T>);
+				} else {
+					reject(`[WisprClient] Node creation failed for token: ${token.id}`);
+				}
 			});
 		});
 	}
@@ -107,8 +131,18 @@ class WisprClientRegistry {
 
 	/**
 	 * Handle incoming messages from the server.
+	 *
+	 * @param message - Message to handle
+	 * @throws Error if message is invalid
 	 */
 	private handleMessage(message: WisprMessage): void {
+		if (!message || typeOf(message) !== "table") {
+			error("[WisprClient] Message cannot be nil and must be a table");
+		}
+		if (!("tokenId" in message) || typeOf(message.tokenId) !== "string") {
+			error("[WisprClient] Message must have a tokenId string property");
+		}
+
 		if ("snapshot" in message) {
 			// Create message
 			this.handleCreate(message as WisprCreateMessage);
@@ -118,32 +152,56 @@ class WisprClientRegistry {
 		} else if ("tokenId" in message && !("version" in message)) {
 			// Destroy message
 			this.handleDestroy(message as WisprDestroyMessage);
+		} else {
+			warn(`[WisprClient] Unknown message type for token: ${message.tokenId}`);
 		}
 	}
 
 	/**
 	 * Handle node creation message.
+	 *
+	 * @param message - Create message to handle
+	 * @throws Error if message is invalid
 	 */
 	private handleCreate(message: WisprCreateMessage): void {
+		if (!message.snapshot || typeOf(message.snapshot) !== "table") {
+			error("[WisprClient] Create message must have a snapshot");
+		}
+		if (message.tokenId !== message.snapshot.tokenId) {
+			error(`[WisprClient] Create message tokenId (${message.tokenId}) does not match snapshot tokenId (${message.snapshot.tokenId})`);
+		}
+
 		// Check if node already exists (shouldn't happen, but be safe)
 		const existing = this.nodes.get(message.tokenId);
 		if (existing) {
-			existing.applySnapshot(message.snapshot);
+			try {
+				existing.applySnapshot(message.snapshot);
+			} catch (err) {
+				warn(`[WisprClient] Error applying snapshot to existing node: ${err}`);
+			}
 			return;
 		}
 
 		// Create new node
-		const token = { id: message.tokenId } as WisprToken;
-		const node = new WisprNode(token, message.snapshot);
-		this.nodes.set(message.tokenId, node);
+		try {
+			const token = { id: message.tokenId } as WisprToken;
+			const node = new WisprNode(token, message.snapshot);
+			this.nodes.set(message.tokenId, node);
 
-		// Resolve any waiters
-		const waiters = this.nodeWaiters.get(message.tokenId);
-		if (waiters) {
-			for (const waiter of waiters) {
-				waiter(node);
+			// Resolve any waiters
+			const waiters = this.nodeWaiters.get(message.tokenId);
+			if (waiters) {
+				for (const waiter of waiters) {
+					try {
+						waiter(node);
+					} catch (err) {
+						warn(`[WisprClient] Error in node waiter: ${err}`);
+					}
+				}
+				this.nodeWaiters.delete(message.tokenId);
 			}
-			this.nodeWaiters.delete(message.tokenId);
+		} catch (err) {
+			error(`[WisprClient] Failed to create node ${message.tokenId}: ${err}`);
 		}
 	}
 
@@ -177,8 +235,15 @@ class WisprClientRegistry {
 	 * Setup handler for ongoing state updates.
 	 */
 	private setupMessageHandler(): void {
+		if (!this.stateUpdateRemote) {
+			error("[WisprClient] Failed to get state update remote");
+		}
 		this.stateUpdateRemote.OnClientEvent.Connect((message: WisprMessage) => {
-			this.handleMessage(message);
+			try {
+				this.handleMessage(message);
+			} catch (err) {
+				warn(`[WisprClient] Error handling message: ${err}`);
+			}
 		});
 	}
 

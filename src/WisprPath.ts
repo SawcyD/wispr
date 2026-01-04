@@ -18,8 +18,25 @@ import type { WisprPath } from "./WisprTypes";
  * const path = pathOf("inventory", "items", "sword_001");
  * // Returns: ["inventory", "items", "sword_001"]
  * ```
+ * @throws Error if keys are invalid
  */
 export function pathOf(...keys: (string | number)[]): WisprPath {
+	if (keys.size() === 0) {
+		error("[WisprPath] Path cannot be empty. At least one key is required.");
+	}
+	for (let i = 0; i < keys.size(); i++) {
+		const key = keys[i];
+		const keyType = typeOf(key);
+		if (keyType !== "string" && keyType !== "number") {
+			error(`[WisprPath] Invalid key type at index ${i}: expected string or number, got ${keyType}`);
+		}
+		if (keyType === "number") {
+			const numKey = key as number;
+			if (numKey < 0 || numKey !== math.floor(numKey)) {
+				error(`[WisprPath] Invalid number key at index ${i}: must be a non-negative integer`);
+			}
+		}
+	}
 	return keys;
 }
 
@@ -49,8 +66,16 @@ export function isValidPath(path: unknown): path is WisprPath {
  * @param obj - Object to traverse
  * @param path - Path to follow
  * @returns Value at path, or undefined
+ * @throws Error if path is invalid
  */
 export function getValueAtPath(obj: unknown, path: WisprPath): unknown {
+	if (!isValidPath(path)) {
+		error("[WisprPath] Invalid path: path must be a non-empty array of strings or numbers");
+	}
+	if (obj === undefined) {
+		return undefined;
+	}
+
 	let current: unknown = obj;
 	for (const key of path) {
 		if (typeOf(current) !== "table") {
@@ -72,10 +97,14 @@ export function getValueAtPath(obj: unknown, path: WisprPath): unknown {
  * @param obj - Object to mutate
  * @param path - Path to set
  * @param value - Value to set
+ * @throws Error if path or object is invalid
  */
 export function setValueAtPath(obj: Record<string | number, unknown>, path: WisprPath, value: unknown): void {
-	if (path.size() === 0) {
-		return;
+	if (!isValidPath(path)) {
+		error("[WisprPath] Invalid path: path must be a non-empty array of strings or numbers");
+	}
+	if (!obj || typeOf(obj) !== "table") {
+		error("[WisprPath] Invalid object: cannot set value on nil or non-table object");
 	}
 
 	let current: Record<string | number, unknown> = obj;
@@ -91,6 +120,7 @@ export function setValueAtPath(obj: Record<string | number, unknown>, path: Wisp
 		if (typeIs(_next, "table")) {
 			current = _next as Record<string | number, unknown>;
 		} else {
+			warn(`[WisprPath] Cannot set value: intermediate path key "${key}" at index ${i} is not a table`);
 			return;
 		}
 	}
@@ -105,9 +135,14 @@ export function setValueAtPath(obj: Record<string | number, unknown>, path: Wisp
  *
  * @param obj - Object to mutate
  * @param path - Path to delete
+ * @throws Error if path is invalid
  */
 export function deleteValueAtPath(obj: Record<string | number, unknown>, path: WisprPath): void {
-	if (path.size() === 0) {
+	if (!isValidPath(path)) {
+		error("[WisprPath] Invalid path: path must be a non-empty array of strings or numbers");
+	}
+	if (!obj || typeOf(obj) !== "table") {
+		warn("[WisprPath] Cannot delete: object is nil or not a table");
 		return;
 	}
 

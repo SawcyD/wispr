@@ -21,14 +21,20 @@ export class WisprMaid {
 	 * The task will be called when destroy() is invoked.
 	 *
 	 * @param task - Cleanup function or object with destroy() method
+	 * @throws Error if task is invalid
 	 */
 	public giveTask(task: (() => void) | { destroy(): void }): void {
+		if (!task) {
+			error("[WisprMaid] task cannot be nil");
+		}
 		if (typeOf(task) === "function") {
 			this.tasks.add(task as () => void);
-		} else {
+		} else if (typeIs(task, "table") && typeOf((task as { destroy?: () => void }).destroy) === "function") {
 			this.tasks.add(() => {
 				(task as { destroy(): void }).destroy();
 			});
+		} else {
+			error("[WisprMaid] task must be a function or object with destroy() method");
 		}
 	}
 

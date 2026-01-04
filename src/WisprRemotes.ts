@@ -24,9 +24,21 @@ export const WISPR_REMOTES = {
 
 /**
  * Get or create a RemoteFunction by name.
+ *
+ * @param name - Name of the remote function
+ * @returns The RemoteFunction instance
+ * @throws Error if name is invalid
  */
 export function getRemoteFunction(name: string): RemoteFunction {
+	if (typeOf(name) !== "string" || name === "") {
+		error("[WisprRemotes] Remote function name must be a non-empty string");
+	}
+
 	const replicatedStorage = game.GetService("ReplicatedStorage");
+	if (!replicatedStorage) {
+		error("[WisprRemotes] Failed to get ReplicatedStorage service");
+	}
+
 	let remote = replicatedStorage.FindFirstChild(name) as RemoteFunction | undefined;
 
 	if (!remote) {
@@ -35,20 +47,40 @@ export function getRemoteFunction(name: string): RemoteFunction {
 		remote.Parent = replicatedStorage;
 	}
 
+	if (!remote) {
+		error(`[WisprRemotes] Failed to create RemoteFunction: ${name}`);
+	}
+
 	return remote;
 }
 
 /**
  * Get or create a RemoteEvent by name.
+ *
+ * @param name - Name of the remote event
+ * @returns The RemoteEvent instance
+ * @throws Error if name is invalid
  */
 export function getRemoteEvent(name: string): RemoteEvent {
+	if (typeOf(name) !== "string" || name === "") {
+		error("[WisprRemotes] Remote event name must be a non-empty string");
+	}
+
 	const replicatedStorage = game.GetService("ReplicatedStorage");
+	if (!replicatedStorage) {
+		error("[WisprRemotes] Failed to get ReplicatedStorage service");
+	}
+
 	let remote = replicatedStorage.FindFirstChild(name) as RemoteEvent | undefined;
 
 	if (!remote) {
 		remote = new Instance("RemoteEvent");
 		remote.Name = name;
 		remote.Parent = replicatedStorage;
+	}
+
+	if (!remote) {
+		error(`[WisprRemotes] Failed to create RemoteEvent: ${name}`);
 	}
 
 	return remote;

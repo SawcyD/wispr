@@ -20,7 +20,7 @@ import type {
 	WisprPatch,
 } from "./WisprTypes";
 import { WisprToken } from "./WisprToken";
-import { getValueAtPath } from "./WisprPath";
+import { getValueAtPath, isValidPath } from "./WisprPath";
 import { applyPatch } from "./WisprPatch";
 import { WisprSignal } from "./WisprSignal";
 import { WisprMaid } from "./WisprMaid";
@@ -44,11 +44,24 @@ export class WisprNode<T = unknown> {
 	 *
 	 * @param token - Token identifying this node
 	 * @param snapshot - Initial snapshot data
+	 * @throws Error if token or snapshot is invalid
 	 */
 	constructor(
 		public readonly token: WisprToken<T>,
 		snapshot: WisprSnapshot,
 	) {
+		if (!token) {
+			error("[WisprNode] Token cannot be nil");
+		}
+		if (!snapshot || typeOf(snapshot) !== "table") {
+			error("[WisprNode] Snapshot cannot be nil and must be a table");
+		}
+		if (typeOf(snapshot.version) !== "number" || snapshot.version < 0) {
+			error("[WisprNode] Snapshot version must be a non-negative number");
+		}
+		if (snapshot.tokenId !== token.id) {
+			error(`[WisprNode] Snapshot tokenId (${snapshot.tokenId}) does not match token id (${token.id})`);
+		}
 		this.state = snapshot.data as T;
 		this.version = snapshot.version;
 	}
@@ -69,8 +82,12 @@ export class WisprNode<T = unknown> {
 	 *
 	 * @param path - Path to the value
 	 * @returns Value at path, or undefined
+	 * @throws Error if path is invalid
 	 */
 	public getValue(path: WisprPath): unknown {
+		if (!isValidPath(path)) {
+			error("[WisprNode] Invalid path: path must be a non-empty array of strings or numbers");
+		}
 		return getValueAtPath(this.state, path);
 	}
 
@@ -87,8 +104,16 @@ export class WisprNode<T = unknown> {
 	 *
 	 * @param patch - Patch to apply
 	 * @returns true if patch was applied, false if version was too old
+	 * @throws Error if patch is invalid
 	 */
 	public applyPatch(patch: WisprPatch): boolean {
+		if (!patch || typeOf(patch) !== "table") {
+			error("[WisprNode] Invalid patch: patch must be a table");
+		}
+		if (patch.tokenId !== this.token.id) {
+			error(`[WisprNode] Patch tokenId (${patch.tokenId}) does not match node token id (${this.token.id})`);
+		}
+
 		// Ignore patches with lower or equal version
 		if (patch.version <= this.version) {
 			return false;
@@ -103,7 +128,11 @@ export class WisprNode<T = unknown> {
 			.JSONDecode(game.GetService("HttpService").JSONEncode(this.state)) as T;
 
 		// Apply patch operations
-		applyPatch(this.state as Record<string | number, unknown>, patch);
+		try {
+			applyPatch(this.state as Record<string | number, unknown>, patch);
+		} catch (err) {
+			error(`[WisprNode] Failed to apply patch: ${err}`);
+		}
 
 		// Update version
 		this.version = patch.version;
@@ -120,13 +149,15 @@ export class WisprNode<T = unknown> {
 				path = operation.path;
 			}
 
-			const pathKey = this.pathToKey(path);
-			const signal = this.changeSignals.get(pathKey);
-			if (signal) {
-				const newValue = getValueAtPath(this.state, path);
-				const oldValue = getValueAtPath(oldState as Record<string | number, unknown>, path);
-				if (newValue !== oldValue) {
-					signal.fire([newValue, oldValue]);
+			if (isValidPath(path)) {
+				const pathKey = this.pathToKey(path);
+				const signal = this.changeSignals.get(pathKey);
+				if (signal) {
+					const newValue = getValueAtPath(this.state, path);
+					const oldValue = getValueAtPath(oldState as Record<string | number, unknown>, path);
+					if (newValue !== oldValue) {
+						signal.fire([newValue, oldValue]);
+					}
 				}
 			}
 		}
@@ -142,8 +173,19 @@ export class WisprNode<T = unknown> {
 	 * Called internally by WisprClient when receiving create messages.
 	 *
 	 * @param snapshot - Snapshot to apply
+	 * @throws Error if snapshot is invalid
 	 */
 	public applySnapshot(snapshot: WisprSnapshot): void {
+		if (!snapshot || typeOf(snapshot) !== "table") {
+			error("[WisprNode] Snapshot cannot be nil and must be a table");
+		}
+		if (snapshot.tokenId !== this.token.id) {
+			error(`[WisprNode] Snapshot tokenId (${snapshot.tokenId}) does not match node token id (${this.token.id})`);
+		}
+		if (typeOf(snapshot.version) !== "number" || snapshot.version < 0) {
+			error("[WisprNode] Snapshot version must be a non-negative number");
+		}
+
 		// Snapshot always supersedes patches
 		this.state = snapshot.data as T;
 		this.version = snapshot.version;
@@ -162,8 +204,16 @@ export class WisprNode<T = unknown> {
 	 * @param path - Path to watch
 	 * @param callback - Function to call on change
 	 * @returns Disconnect function
+	 * @throws Error if path or callback is invalid
 	 */
 	public listenForChange(path: WisprPath, callback: WisprChangeCallback): () => void {
+		if (!isValidPath(path)) {
+			error("[WisprNode] Invalid path: path must be a non-empty array of strings or numbers");
+		}
+		if (typeOf(callback) !== "function") {
+			error("[WisprNode] Callback must be a function");
+		}
+
 		const pathKey = this.pathToKey(path);
 		let signal = this.changeSignals.get(pathKey);
 		if (!signal) {
@@ -185,8 +235,12 @@ export class WisprNode<T = unknown> {
 	 *
 	 * @param callback - Function to call on change
 	 * @returns Disconnect function
+	 * @throws Error if callback is invalid
 	 */
 	public listenForAnyChange(callback: WisprAnyChangeCallback): () => void {
+		if (typeOf(callback) !== "function") {
+			error("[WisprNode] Callback must be a function");
+		}
 		const disconnect = this.anyChangeSignal.connect(callback);
 		this.maid.giveTask(disconnect);
 		return disconnect;
@@ -198,8 +252,12 @@ export class WisprNode<T = unknown> {
 	 *
 	 * @param callback - Function to call on patch
 	 * @returns Disconnect function
+	 * @throws Error if callback is invalid
 	 */
 	public listenForRawPatch(callback: WisprRawPatchCallback): () => void {
+		if (typeOf(callback) !== "function") {
+			error("[WisprNode] Callback must be a function");
+		}
 		const disconnect = this.rawPatchSignal.connect(callback);
 		this.maid.giveTask(disconnect);
 		return disconnect;

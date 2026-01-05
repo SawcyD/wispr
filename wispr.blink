@@ -1,0 +1,39 @@
+// Wispr Blink IDL
+// 
+// IMPORTANT: Copy this file to your project's Blink directory (e.g., ./blink/wispr.blink)
+// Then import it in your main Blink file: import "./wispr.blink"
+//
+// This file does not contain option statements - it inherits from the importing file
+// You can customize this file after copying it if needed
+
+// Wispr type definitions
+
+// Snapshot sent when a node is created
+struct WisprSnapshot {
+    tokenId: string,
+    version: u32,
+    data: unknown
+}
+
+// Create message sent when a node is created
+struct WisprCreateMessage {
+    tokenId: string,
+    snapshot: WisprSnapshot
+}
+
+// Remote Function: Client requests initial snapshot data
+// Returns JSON-encoded array of WisprCreateMessage
+function WisprRequestInitialData {
+    Yield: Coroutine,
+    Data: void,
+    Return: string
+}
+
+// Remote Event: Server sends state updates (create, patch, destroy)
+// Data is JSON-encoded WisprMessage (can be create, patch, or destroy)
+event WisprStateUpdates {
+    From: Server,
+    Type: Reliable,
+    Call: ManyAsync,
+    Data: string
+}

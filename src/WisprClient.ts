@@ -165,6 +165,7 @@ class WisprClientRegistry {
 		// Check existing nodes that match the pattern
 		for (const [, node] of this.nodes) {
 			if (node.token.id.sub(1, pattern.size()) === pattern) {
+				// Check if the node's token ID matches the pattern
 				try {
 					callback(node);
 				} catch (err) {

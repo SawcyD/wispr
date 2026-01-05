@@ -3,7 +3,12 @@
  *
  * All remote names are defined here to avoid magic strings.
  * Remotes are created lazily on first access.
+ *
+ * Supports optional Blink integration for improved performance and security.
+ * When Blink is enabled, uses Blink-generated remotes instead of standard Roblox remotes.
  */
+
+import { isBlinkEnabled, getBlinkConfig, getBlinkRemoteName } from "./WisprBlinkConfig";
 
 /**
  * Remote names used by Wispr.
@@ -24,6 +29,7 @@ export const WISPR_REMOTES = {
 
 /**
  * Get or create a RemoteFunction by name.
+ * If Blink is enabled, uses Blink-generated wrapper.
  *
  * @param name - Name of the remote function
  * @returns The RemoteFunction instance
@@ -34,6 +40,40 @@ export function getRemoteFunction(name: string): RemoteFunction {
 		error("[WisprRemotes] Remote function name must be a non-empty string");
 	}
 
+	// Try Blink integration if enabled
+	if (isBlinkEnabled()) {
+		const config = getBlinkConfig();
+		const runService = game.GetService("RunService");
+		const blinkPath = runService.IsServer()
+			? config.serverBlinkPath
+			: config.clientBlinkPath;
+
+		if (blinkPath) {
+			const [success, blinkModule] = pcall(() => {
+				// Type assertion: require() accepts string paths at runtime in roblox-ts
+				return require(blinkPath as unknown as ModuleScript) as Record<string, unknown>;
+			});
+
+			if (success && blinkModule) {
+				const blinkName = getBlinkRemoteName(name);
+				const blinkRemote = blinkModule[blinkName];
+
+				if (blinkRemote) {
+					return blinkRemote as RemoteFunction;
+				} else {
+					warn(
+						`[WisprRemotes] Blink remote function "${blinkName}" not found in module. Falling back to standard RemoteFunction.`,
+					);
+				}
+			} else {
+				warn(
+					`[WisprRemotes] Failed to require Blink module at "${blinkPath}". Falling back to standard RemoteFunction.`,
+				);
+			}
+		}
+	}
+
+	// Fallback to standard RemoteFunction
 	const replicatedStorage = game.GetService("ReplicatedStorage");
 	if (!replicatedStorage) {
 		error("[WisprRemotes] Failed to get ReplicatedStorage service");
@@ -56,6 +96,7 @@ export function getRemoteFunction(name: string): RemoteFunction {
 
 /**
  * Get or create a RemoteEvent by name.
+ * If Blink is enabled, uses Blink-generated wrapper.
  *
  * @param name - Name of the remote event
  * @returns The RemoteEvent instance
@@ -66,6 +107,42 @@ export function getRemoteEvent(name: string): RemoteEvent {
 		error("[WisprRemotes] Remote event name must be a non-empty string");
 	}
 
+	// Try Blink integration if enabled
+	if (isBlinkEnabled()) {
+		const config = getBlinkConfig();
+		const runService = game.GetService("RunService");
+		// Events are used on both client and server, but we need the appropriate module
+		// Client listens to events from server, server fires events to clients
+		const blinkPath = runService.IsServer()
+			? config.serverBlinkPath
+			: config.clientBlinkPath;
+
+		if (blinkPath) {
+			const [success, blinkModule] = pcall(() => {
+				// Type assertion: require() accepts string paths at runtime in roblox-ts
+				return require(blinkPath as unknown as ModuleScript) as Record<string, unknown>;
+			});
+
+			if (success && blinkModule) {
+				const blinkName = getBlinkRemoteName(name);
+				const blinkRemote = blinkModule[blinkName];
+
+				if (blinkRemote) {
+					return blinkRemote as RemoteEvent;
+				} else {
+					warn(
+						`[WisprRemotes] Blink remote event "${blinkName}" not found in module. Falling back to standard RemoteEvent.`,
+					);
+				}
+			} else {
+				warn(
+					`[WisprRemotes] Failed to require Blink module at "${blinkPath}". Falling back to standard RemoteEvent.`,
+				);
+			}
+		}
+	}
+
+	// Fallback to standard RemoteEvent
 	const replicatedStorage = game.GetService("ReplicatedStorage");
 	if (!replicatedStorage) {
 		error("[WisprRemotes] Failed to get ReplicatedStorage service");

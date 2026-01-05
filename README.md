@@ -300,23 +300,136 @@ inventory.listenForChange(pathOf("items"), (newItems) => {
 });
 ```
 
-## Future Implementations
+## Blink Integration
 
-### Blink Integration
+Wispr supports optional integration with [Blink](https://1axen.github.io/blink/) for enhanced performance and security:
 
-Planning to integrate [Blink](https://1axen.github.io/blink/) for even better performance and security:
-
-- **Enhanced Compression**: Blink's IDL compiler will provide more efficient serialization
+- **Enhanced Compression**: Blink's IDL compiler provides more efficient serialization
 - **Better Security**: Harder to snoop on network traffic due to Blink's compression
-- **Type Safety**: Blink's schema validation will add an extra layer of type checking
+- **Type Safety**: Blink's schema validation adds an extra layer of type checking
 - **Lower Bandwidth**: Further reduction in network usage compared to standard RemoteEvents
 
-This integration will be opt-in and backward compatible with the current implementation.
+### Setup
+
+1. **Create a `wispr.blink` file** in your Blink directory (e.g., `./blink/wispr.blink`) and copy the following content:
+
+   ```blink
+   -- Wispr Blink IDL
+   -- 
+   -- This file defines Wispr's remote functions and events for Blink
+   -- Import this file in your main Blink file: import "./wispr.blink"
+   --
+   -- This file does not contain option statements - it inherits from the importing file
+   -- You can customize this file if needed
+
+   -- Wispr type definitions
+
+   -- Snapshot sent when a node is created
+   struct WisprSnapshot {
+       tokenId: string,
+       version: u32,
+       data: unknown
+   }
+
+   -- Create message sent when a node is created
+   struct WisprCreateMessage {
+       tokenId: string,
+       snapshot: WisprSnapshot
+   }
+
+   -- Remote Function: Client requests initial snapshot data
+   -- Returns JSON-encoded array of WisprCreateMessage
+   function WisprRequestInitialData {
+       Yield: Coroutine,
+       Return: string
+   }
+
+   -- Remote Event: Server sends state updates (create, patch, destroy)
+   -- Data is JSON-encoded WisprMessage (can be create, patch, or destroy)
+   event WisprStateUpdates {
+       From: Server,
+       Type: Reliable,
+       Call: ManyAsync,
+       Data: string
+   }
+   ```
+
+2. **Import it in your main Blink file**:
+   ```blink
+   // init.blink or your main Blink file
+   option Casing = Camel  // or Pascal, Snake, Kebab
+   option ServerOutput = "../src/server/network/network.luau"
+   option ClientOutput = "../src/shared/network/network.luau"
+   option Typescript = true
+   
+   import "./wispr.blink"
+   ```
+
+3. **Configure Wispr to use Blink**:
+   ```typescript
+   import { configureBlink } from "@rbxts/wispr";
+   
+   configureBlink({
+       enabled: true,
+       serverBlinkPath: "./src/server/network/network",
+       clientBlinkPath: "./src/shared/network/network",
+       casing: "Camel",  // Must match your Blink option Casing
+   });
+   ```
+
+4. **Compile your Blink files** before running your game:
+   ```bash
+   blink compile init.blink
+   ```
+
+The integration is opt-in and backward compatible. If Blink is not enabled or paths are incorrect, Wispr will automatically fall back to standard RemoteFunction/RemoteEvent.
+
+## Future Implementations
+
+Planned features and improvements for future releases:
+
+### Networking Enhancements
+
+- **Reliable and Unreliable Events**: Support for both reliable and unreliable event types, allowing developers to choose the appropriate reliability level for different types of updates (e.g., unreliable for frequent position updates, reliable for critical state changes)
+- **Batch Updates**: Send multiple patch operations in a single network message to reduce overhead for rapid state changes
+- **Delta Compression**: Further optimize bandwidth by only sending the differences between consecutive state snapshots
+- **Custom Serialization**: Allow developers to provide custom serialization/deserialization functions for specific data types
+
+### Performance Optimizations
+
+- **Client-Side Prediction**: Support for optimistic updates on the client before server confirmation, reducing perceived latency
+- **Selective Replication**: Fine-grained control over which parts of state are replicated to which clients based on distance, visibility, or custom logic
+- **Compression Options**: Configurable compression algorithms and levels for different use cases
+
+### Developer Experience
+
+- **Middleware/Hooks System**: Intercept and modify patches before they're sent or applied, enabling custom validation, logging, or transformation
+- **Rate Limiting Per Node**: Configure rate limits on a per-node basis to prevent abuse and manage bandwidth
+- **Automatic Reconnection Handling**: Automatic recovery from network interruptions with state synchronization
+- **Dev Tools**: Built-in debugging utilities, network traffic visualization, and state inspection tools
+- **Metrics and Analytics**: Built-in performance metrics for bandwidth usage, patch frequency, and replication efficiency
+
+### Advanced Features
+
+- **State Versioning**: Long-term state versioning for rollback, replay, and debugging capabilities
+- **Conflict Resolution**: Automatic conflict resolution strategies for concurrent state modifications
+- **State Persistence**: Optional persistence layer for state that should survive server restarts
+- **Cross-Server Replication**: Support for replicating state across multiple game servers
 
 ## Changelog
 
+### [1.0.33] - 2025-01-05
+- **Added**: Blink integration for enhanced performance and security
+  - Optional integration with [Blink](https://1axen.github.io/blink/) IDL compiler
+  - Support for custom casing conventions (Pascal, Camel, Snake, Kebab)
+  - Automatic fallback to standard remotes if Blink is not configured
+  - See [Blink Integration](#blink-integration) section for setup instructions
+
 ### [1.0.32] - 2025-01-04
 - **Added**: `onNodeOfClassCreated` method for listening to nodes matching a token ID pattern (similar to ReplicaService's `ReplicaOfClassCreated`)
+
+### [1.0.31] - 2025-01-05
+- **Added**: Enhanced error handling and validation in WisprClient for better reliability and debugging
 
 ### [1.0.3] - 2025-01-04
 - **Added**: Comprehensive error handling and input validation across all modules and classes

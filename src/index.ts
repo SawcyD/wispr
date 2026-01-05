@@ -64,6 +64,10 @@ export { applyPatch, applyPatchOperation } from "./WisprPatch";
 // Remotes
 export { getRemoteFunction, getRemoteEvent, WISPR_REMOTES, initializeRemotes } from "./WisprRemotes";
 
+// Blink integration
+export { configureBlink } from "./WisprBlinkConfig";
+export type { WisprBlinkConfig, BlinkCasing } from "./WisprBlinkConfig";
+
 // Client API
 export { WisprNode } from "./WisprNode";
 export { requestInitialData, waitForNode, getNode as getClientNode } from "./WisprClient";

@@ -289,7 +289,8 @@ class WisprServerRegistry {
 		}
 
 		// Apply all operations
-		for (const [i, operation] of ipairs(operations)) {
+		for (let i = 0; i < operations.size(); i++) {
+			const operation = operations[i];
 			try {
 				node!.applyOperation(operation);
 			} catch (err) {

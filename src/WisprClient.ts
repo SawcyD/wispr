@@ -26,6 +26,7 @@ import { getRemoteFunction, getRemoteEvent, WISPR_REMOTES } from "./WisprRemotes
 class WisprClientRegistry {
 	private readonly nodes = new Map<string, WisprNode>();
 	private readonly nodeWaiters = new Map<string, Array<(node: WisprNode) => void>>();
+	private readonly patternListeners = new Map<string, Array<(node: WisprNode) => void>>();
 	private readonly stateUpdateRemote: RemoteEvent;
 	private isInitialized = false;
 
@@ -65,7 +66,8 @@ class WisprClientRegistry {
 			// Process initial create messages
 			if (typeIs(messages, "table")) {
 				const messageArray = messages as WisprMessage[];
-				for (const [i, message] of ipairs(messageArray)) {
+				for (let i = 0; i < messageArray.size(); i++) {
+					const message = messageArray[i];
 					try {
 						this.handleMessage(message);
 					} catch (err) {
@@ -130,6 +132,63 @@ class WisprClientRegistry {
 	}
 
 	/**
+	 * Listen for when nodes matching a token ID pattern are created.
+	 * Similar to ReplicaService's ReplicaOfClassCreated.
+	 *
+	 * @param pattern - Token ID pattern to match (e.g., "player." to match "player.123", "player.456", etc.)
+	 * @param callback - Function to call when a matching node is created
+	 * @returns Disconnect function
+	 *
+	 * @example
+	 * ```ts
+	 * onNodeOfClassCreated("player.", (node) => {
+	 *   print(`Player node created: ${node.token.id}`);
+	 * });
+	 * ```
+	 */
+	public onNodeOfClassCreated(pattern: string, callback: (node: WisprNode) => void): () => void {
+		if (typeOf(pattern) !== "string" || pattern === "") {
+			error("[WisprClient] Pattern must be a non-empty string");
+		}
+		if (typeOf(callback) !== "function") {
+			error("[WisprClient] Callback must be a function");
+		}
+
+		// Store listener
+		let listeners = this.patternListeners.get(pattern);
+		if (!listeners) {
+			listeners = [];
+			this.patternListeners.set(pattern, listeners);
+		}
+		listeners.push(callback);
+
+		// Check existing nodes that match the pattern
+		for (const [, node] of this.nodes) {
+			if (node.token.id.sub(1, pattern.size()) === pattern) {
+				try {
+					callback(node);
+				} catch (err) {
+					warn(`[WisprClient] Error in pattern listener for existing node: ${err}`);
+				}
+			}
+		}
+
+		// Return disconnect function
+		return () => {
+			const listenerArray = this.patternListeners.get(pattern);
+			if (listenerArray) {
+				const index = listenerArray.indexOf(callback);
+				if (index !== -1) {
+					listenerArray.remove(index);
+				}
+				if (listenerArray.size() === 0) {
+					this.patternListeners.delete(pattern);
+				}
+			}
+		};
+	}
+
+	/**
 	 * Handle incoming messages from the server.
 	 *
 	 * @param message - Message to handle
@@ -168,7 +227,9 @@ class WisprClientRegistry {
 			error("[WisprClient] Create message must have a snapshot");
 		}
 		if (message.tokenId !== message.snapshot.tokenId) {
-			error(`[WisprClient] Create message tokenId (${message.tokenId}) does not match snapshot tokenId (${message.snapshot.tokenId})`);
+			error(
+				`[WisprClient] Create message tokenId (${message.tokenId}) does not match snapshot tokenId (${message.snapshot.tokenId})`,
+			);
 		}
 
 		// Check if node already exists (shouldn't happen, but be safe)
@@ -200,6 +261,19 @@ class WisprClientRegistry {
 				}
 				this.nodeWaiters.delete(message.tokenId);
 			}
+
+			// Fire pattern listeners
+			for (const [pattern, listeners] of this.patternListeners) {
+				if (message.tokenId.sub(1, pattern.size()) === pattern) {
+					for (const listener of listeners) {
+						try {
+							listener(node);
+						} catch (err) {
+							warn(`[WisprClient] Error in pattern listener: ${err}`);
+						}
+					}
+				}
+			}
 		} catch (err) {
 			error(`[WisprClient] Failed to create node ${message.tokenId}: ${err}`);
 		}
@@ -209,13 +283,34 @@ class WisprClientRegistry {
 	 * Handle patch message.
 	 */
 	private handlePatch(patch: WisprPatch): void {
+		if (!patch || typeOf(patch) !== "table") {
+			warn("[WisprClient] Patch message cannot be nil and must be a table");
+			return;
+		}
+		if (!("tokenId" in patch) || typeOf(patch.tokenId) !== "string") {
+			warn("[WisprClient] Patch must have a tokenId string property");
+			return;
+		}
+		if (!("version" in patch) || typeOf(patch.version) !== "number" || patch.version < 0) {
+			warn(`[WisprClient] Patch version must be a non-negative number, got: ${typeOf(patch.version)}`);
+			return;
+		}
+		if (!("operations" in patch) || !typeIs(patch.operations, "table")) {
+			warn("[WisprClient] Patch must have an operations array");
+			return;
+		}
+
 		const node = this.nodes.get(patch.tokenId);
 		if (!node) {
 			warn(`[WisprClient] Received patch for unknown node: ${patch.tokenId}`);
 			return;
 		}
 
-		node.applyPatch(patch);
+		try {
+			node.applyPatch(patch);
+		} catch (err) {
+			warn(`[WisprClient] Failed to apply patch to node ${patch.tokenId}: ${err}`);
+		}
 	}
 
 	/**
@@ -292,4 +387,23 @@ export async function waitForNode<T>(token: WisprToken<T>): Promise<WisprNode<T>
  */
 export function getNode<T>(token: WisprToken<T>): WisprNode<T> | undefined {
 	return getWisprClient().getNode(token);
+}
+
+/**
+ * Listen for when nodes matching a token ID pattern are created.
+ * Similar to ReplicaService's ReplicaOfClassCreated.
+ *
+ * @param pattern - Token ID pattern to match (e.g., "player." to match "player.123", "player.456", etc.)
+ * @param callback - Function to call when a matching node is created
+ * @returns Disconnect function
+ *
+ * @example
+ * ```ts
+ * onNodeOfClassCreated("player.", (node) => {
+ *   print(`Player node created: ${node.token.id}`);
+ * });
+ * ```
+ */
+export function onNodeOfClassCreated(pattern: string, callback: (node: WisprNode) => void): () => void {
+	return getWisprClient().onNodeOfClassCreated(pattern, callback);
 }

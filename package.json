@@ -1,6 +1,6 @@
 {
   "name": "@rbxts/wispr",
-  "version": "1.0.3",
+  "version": "1.0.32",
   "description": "Server-authoritative state replication system for Roblox TypeScript",
   "main": "out/init.lua",
   "scripts": {

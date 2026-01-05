@@ -68,6 +68,21 @@ node.listenForChange(pathOf("gold"), (newVal, oldVal) => {
 node.listenForAnyChange(() => {
 	print("Stats updated!");
 });
+
+// Listen for nodes matching a pattern (similar to ReplicaService)
+import { onNodeOfClassCreated, requestInitialData } from "@rbxts/wispr";
+
+await requestInitialData();
+
+// Listen for any player data node (e.g., "player.data.123", "player.data.456")
+onNodeOfClassCreated("player.data.", (node) => {
+	print(`Player data node created: ${node.token.id}`);
+	const data = node.getState();
+	// Setup UI, listeners, etc. for this player's data
+	node.listenForChange(pathOf("coins"), (newCoins) => {
+		updateCoinsUI(newCoins as number);
+	});
+});
 ```
 
 ## Core Concepts
@@ -175,6 +190,9 @@ waitForNode<T>(token: WisprToken<T>): Promise<WisprNode<T>>
 
 // Get a node (returns undefined if not found)
 getClientNode<T>(token: WisprToken<T>): WisprNode<T> | undefined
+
+// Listen for nodes matching a token ID pattern
+onNodeOfClassCreated(pattern: string, callback: (node: WisprNode) => void): () => void
 ```
 
 ### WisprNode (Client)
@@ -296,6 +314,9 @@ Planning to integrate [Blink](https://1axen.github.io/blink/) for even better pe
 This integration will be opt-in and backward compatible with the current implementation.
 
 ## Changelog
+
+### [1.0.32] - 2025-01-04
+- **Added**: `onNodeOfClassCreated` method for listening to nodes matching a token ID pattern (similar to ReplicaService's `ReplicaOfClassCreated`)
 
 ### [1.0.3] - 2025-01-04
 - **Added**: Comprehensive error handling and input validation across all modules and classes

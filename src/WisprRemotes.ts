@@ -44,30 +44,17 @@ export function getRemoteFunction(name: string): RemoteFunction {
 	if (isBlinkEnabled()) {
 		const config = getBlinkConfig();
 		const runService = game.GetService("RunService");
-		const blinkPath = runService.IsServer()
-			? config.serverBlinkPath
-			: config.clientBlinkPath;
+		const blinkModule = runService.IsServer() ? config.serverBlinkModule : config.clientBlinkModule;
 
-		if (blinkPath) {
-			const [success, blinkModule] = pcall(() => {
-				// Type assertion: require() accepts string paths at runtime in roblox-ts
-				return require(blinkPath as unknown as ModuleScript) as Record<string, unknown>;
-			});
+		if (blinkModule) {
+			const blinkName = getBlinkRemoteName(name);
+			const blinkRemote = blinkModule[blinkName];
 
-			if (success && blinkModule) {
-				const blinkName = getBlinkRemoteName(name);
-				const blinkRemote = blinkModule[blinkName];
-
-				if (blinkRemote) {
-					return blinkRemote as RemoteFunction;
-				} else {
-					warn(
-						`[WisprRemotes] Blink remote function "${blinkName}" not found in module. Falling back to standard RemoteFunction.`,
-					);
-				}
+			if (blinkRemote) {
+				return blinkRemote as RemoteFunction;
 			} else {
 				warn(
-					`[WisprRemotes] Failed to require Blink module at "${blinkPath}". Falling back to standard RemoteFunction.`,
+					`[WisprRemotes] Blink remote function "${blinkName}" not found in module. Falling back to standard RemoteFunction.`,
 				);
 			}
 		}
@@ -113,30 +100,17 @@ export function getRemoteEvent(name: string): RemoteEvent {
 		const runService = game.GetService("RunService");
 		// Events are used on both client and server, but we need the appropriate module
 		// Client listens to events from server, server fires events to clients
-		const blinkPath = runService.IsServer()
-			? config.serverBlinkPath
-			: config.clientBlinkPath;
+		const blinkModule = runService.IsServer() ? config.serverBlinkModule : config.clientBlinkModule;
 
-		if (blinkPath) {
-			const [success, blinkModule] = pcall(() => {
-				// Type assertion: require() accepts string paths at runtime in roblox-ts
-				return require(blinkPath as unknown as ModuleScript) as Record<string, unknown>;
-			});
+		if (blinkModule) {
+			const blinkName = getBlinkRemoteName(name);
+			const blinkRemote = blinkModule[blinkName];
 
-			if (success && blinkModule) {
-				const blinkName = getBlinkRemoteName(name);
-				const blinkRemote = blinkModule[blinkName];
-
-				if (blinkRemote) {
-					return blinkRemote as RemoteEvent;
-				} else {
-					warn(
-						`[WisprRemotes] Blink remote event "${blinkName}" not found in module. Falling back to standard RemoteEvent.`,
-					);
-				}
+			if (blinkRemote) {
+				return blinkRemote as RemoteEvent;
 			} else {
 				warn(
-					`[WisprRemotes] Failed to require Blink module at "${blinkPath}". Falling back to standard RemoteEvent.`,
+					`[WisprRemotes] Blink remote event "${blinkName}" not found in module. Falling back to standard RemoteEvent.`,
 				);
 			}
 		}

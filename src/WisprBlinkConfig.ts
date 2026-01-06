@@ -4,8 +4,9 @@
  * Allows users to optionally use Blink-generated remotes for improved
  * performance and security. Users must:
  * 1. Import wispr.blink into their Blink setup
- * 2. Configure paths to their generated Blink code
- * 3. Set casing to match their Blink option Casing
+ * 2. Import the generated Blink modules
+ * 3. Configure Wispr with the imported modules
+ * 4. Set casing to match their Blink option Casing
  */
 
 /**
@@ -19,47 +20,48 @@ export type BlinkCasing = "Camel" | "Pascal" | "Snake" | "Kebab";
 export interface WisprBlinkConfig {
 	/** Whether Blink is enabled */
 	enabled: boolean;
-	/** Path to the generated Blink server code (relative to project root) */
-	serverBlinkPath?: string;
-	/** Path to the generated Blink client code (relative to project root) */
-	clientBlinkPath?: string;
+	/** The imported Blink server module */
+	serverBlinkModule?: Record<string, unknown>;
+	/** The imported Blink client module */
+	clientBlinkModule?: Record<string, unknown>;
 	/** Casing convention used in Blink (must match option Casing in .blink file) */
 	casing?: BlinkCasing;
 }
 
-let blinkConfig: WisprBlinkConfig = {
+const blinkConfig: WisprBlinkConfig = {
 	enabled: false,
-	serverBlinkPath: "./src/server/network/network",
-	clientBlinkPath: "./src/shared/network/network",
 	casing: "Pascal", // Default to PascalCase (WisprRequestInitialData)
 };
 
 /**
  * Configure Blink integration for Wispr.
  *
- * @param config - Partial configuration to apply
+ * ⚠️ **Blink integration is currently disabled and not available for use.**
+ * This function is kept for API compatibility but will not enable Blink integration.
  *
- * @example
- * ```ts
- * configureBlink({
- *   enabled: true,
- *   serverBlinkPath: "./src/server/network/network",
- *   clientBlinkPath: "./src/shared/network/network",
- *   casing: "Camel"
- * });
- * ```
+ * @param _config - Partial configuration to apply (ignored)
+ * @deprecated Blink integration is not currently functional and has been disabled
  */
-export function configureBlink(config: Partial<WisprBlinkConfig>): void {
-	blinkConfig = { ...blinkConfig, ...config };
+export function configureBlink(_config: Partial<WisprBlinkConfig>): void {
+	warn(
+		"[Wispr] Blink integration is currently disabled and not available. Wispr will use standard RemoteFunction/RemoteEvent.",
+	);
+	// Do not update config - Blink integration is disabled
+	// blinkConfig = { ...blinkConfig, ...config };
 }
 
 /**
  * Check if Blink integration is enabled.
  *
- * @returns true if Blink is enabled
+ * ⚠️ **Blink integration is currently disabled and always returns false.**
+ *
+ * @returns Always returns false (Blink integration is disabled)
+ * @deprecated Blink integration is not currently functional
  */
 export function isBlinkEnabled(): boolean {
-	return blinkConfig.enabled;
+	// Blink integration is disabled - always return false
+	return false;
+	// return blinkConfig.enabled;
 }
 
 /**

@@ -1,12 +1,13 @@
 {
   "name": "@rbxts/wispr",
-  "version": "1.0.33",
+  "version": "1.0.36",
   "description": "Server-authoritative state replication system for Roblox TypeScript",
   "main": "out/init.lua",
   "scripts": {
     "build": "rbxtsc",
     "watch": "rbxtsc -w",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "clean": "node -e \"require('fs').rmSync('out', {recursive: true, force: true}); require('fs').mkdirSync('out', {recursive: true});\""
   },
   "keywords": [
     "roblox",
@@ -43,6 +44,5 @@
     "roblox-ts": "^3.0.0",
     "typescript": "^5.9.3"
   },
-  "dependencies": {
-  }
+  "dependencies": {}
 }

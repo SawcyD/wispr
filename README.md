@@ -302,87 +302,11 @@ inventory.listenForChange(pathOf("items"), (newItems) => {
 
 ## Blink Integration
 
-Wispr supports optional integration with [Blink](https://1axen.github.io/blink/) for enhanced performance and security:
+> **🚫 Currently Unavailable**: Blink integration has been temporarily disabled due to compatibility issues. Wispr currently uses standard RemoteFunction/RemoteEvent for all networking. Blink integration may be re-enabled in a future release once the issues are resolved.
 
-- **Enhanced Compression**: Blink's IDL compiler provides more efficient serialization
-- **Better Security**: Harder to snoop on network traffic due to Blink's compression
-- **Type Safety**: Blink's schema validation adds an extra layer of type checking
-- **Lower Bandwidth**: Further reduction in network usage compared to standard RemoteEvents
+Wispr was designed to support optional integration with [Blink](https://1axen.github.io/blink/) for enhanced performance and security, but this feature is currently disabled. The `configureBlink()` function is available for API compatibility but will not enable Blink integration.
 
-### Setup
-
-1. **Create a `wispr.blink` file** in your Blink directory (e.g., `./blink/wispr.blink`) and copy the following content:
-
-   ```blink
-   -- Wispr Blink IDL
-   -- 
-   -- This file defines Wispr's remote functions and events for Blink
-   -- Import this file in your main Blink file: import "./wispr.blink"
-   --
-   -- This file does not contain option statements - it inherits from the importing file
-   -- You can customize this file if needed
-
-   -- Wispr type definitions
-
-   -- Snapshot sent when a node is created
-   struct WisprSnapshot {
-       tokenId: string,
-       version: u32,
-       data: unknown
-   }
-
-   -- Create message sent when a node is created
-   struct WisprCreateMessage {
-       tokenId: string,
-       snapshot: WisprSnapshot
-   }
-
-   -- Remote Function: Client requests initial snapshot data
-   -- Returns JSON-encoded array of WisprCreateMessage
-   function WisprRequestInitialData {
-       Yield: Coroutine,
-       Return: string
-   }
-
-   -- Remote Event: Server sends state updates (create, patch, destroy)
-   -- Data is JSON-encoded WisprMessage (can be create, patch, or destroy)
-   event WisprStateUpdates {
-       From: Server,
-       Type: Reliable,
-       Call: ManyAsync,
-       Data: string
-   }
-   ```
-
-2. **Import it in your main Blink file**:
-   ```blink
-   // init.blink or your main Blink file
-   option Casing = Camel  // or Pascal, Snake, Kebab
-   option ServerOutput = "../src/server/network/network.luau"
-   option ClientOutput = "../src/shared/network/network.luau"
-   option Typescript = true
-   
-   import "./wispr.blink"
-   ```
-
-3. **Configure Wispr to use Blink**:
-   ```typescript
-   import { configureBlink } from "@rbxts/wispr";
-   
-   configureBlink({
-       enabled: true,
-       serverBlinkPath: "./src/server/network/network",
-       clientBlinkPath: "./src/shared/network/network",
-       casing: "Camel",  // Must match your Blink option Casing
-   });
-   ```
-
-4. **Compile your Blink files** before running your game:
-   ```bash
-   blink compile init.blink
-   ```
-
-The integration is opt-in and backward compatible. If Blink is not enabled or paths are incorrect, Wispr will automatically fall back to standard RemoteFunction/RemoteEvent.
+**Wispr will always use standard RemoteFunction/RemoteEvent** regardless of any Blink configuration attempts.
 
 ## Future Implementations
 
@@ -409,14 +333,17 @@ Planned features and improvements for future releases:
 - **Dev Tools**: Built-in debugging utilities, network traffic visualization, and state inspection tools
 - **Metrics and Analytics**: Built-in performance metrics for bandwidth usage, patch frequency, and replication efficiency
 
-### Advanced Features
-
-- **State Versioning**: Long-term state versioning for rollback, replay, and debugging capabilities
-- **Conflict Resolution**: Automatic conflict resolution strategies for concurrent state modifications
-- **State Persistence**: Optional persistence layer for state that should survive server restarts
-- **Cross-Server Replication**: Support for replicating state across multiple game servers
 
 ## Changelog
+
+### [1.0.35] - 2025-01-05
+- **Disabled**: Blink integration has been temporarily disabled due to compatibility issues. The `configureBlink()` function remains for API compatibility but will not enable Blink integration. Wispr will always use standard RemoteFunction/RemoteEvent.
+
+### [1.0.34] - 2025-01-05
+- **Changed**: Blink integration now uses module imports instead of string paths for better type safety
+  - Changed `serverBlinkPath` and `clientBlinkPath` to `serverBlinkModule` and `clientBlinkModule`
+  - Users now import Blink modules directly: `import * as serverNetwork from "server/network/network"`
+  - Improves type safety and eliminates path resolution issues
 
 ### [1.0.33] - 2025-01-05
 - **Added**: Blink integration for enhanced performance and security
@@ -442,6 +369,13 @@ Planned features and improvements for future releases:
 
 ### [1.0.1] - 2025-01-03
 - Initial release
+
+## Support
+
+Thank you for the support!  
+Wispr is free to use, and your tip helps me keep maintaining and improving it. I appreciate you.
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/sawcy)
 
 ## License
 

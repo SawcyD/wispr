@@ -4,6 +4,13 @@
 
 Wispr provides a simple, safe, and explicit way to replicate state from server to clients using a snapshot + patch model. Built for [roblox-ts](https://roblox-ts.com/).
 
+
+Need help or found a bug? Join the Discord and ask:
+
+[![](https://dcbadge.limes.pink/api/server/wQqwTWuFZS)](https://discord.gg/wQqwTWuFZS)
+
+
+
 ## Features
 
 - **Server Authoritative**: Only the server can mutate state, ensuring security and consistency

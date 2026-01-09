@@ -39,16 +39,20 @@ export type WisprScope = { kind: "all" } | { kind: "player"; player: Player } | 
 /**
  * Patch operation type.
  * Patches are the only way state changes are communicated to clients.
+ *
+ * Optional reliability field (defaults to "reliable"):
+ * - "reliable": Uses RemoteEvent, guaranteed delivery
+ * - "unreliable": Uses UnreliableRemoteEvent, may be dropped (best for frequent updates like positions)
  */
 export type WisprPatchOp =
-	| { type: "set"; path: WisprPath; value: unknown }
-	| { type: "delete"; path: WisprPath }
-	| { type: "increment"; path: WisprPath; delta: number }
-	| { type: "listPush"; path: WisprPath; value: unknown }
-	| { type: "listInsert"; path: WisprPath; index: number; value: unknown }
-	| { type: "listRemoveAt"; path: WisprPath; index: number }
-	| { type: "mapSet"; pathToMap: WisprPath; id: string; value: unknown }
-	| { type: "mapDelete"; pathToMap: WisprPath; id: string };
+	| { type: "set"; path: WisprPath; value: unknown; reliability?: "reliable" | "unreliable" }
+	| { type: "delete"; path: WisprPath; reliability?: "reliable" | "unreliable" }
+	| { type: "increment"; path: WisprPath; delta: number; reliability?: "reliable" | "unreliable" }
+	| { type: "listPush"; path: WisprPath; value: unknown; reliability?: "reliable" | "unreliable" }
+	| { type: "listInsert"; path: WisprPath; index: number; value: unknown; reliability?: "reliable" | "unreliable" }
+	| { type: "listRemoveAt"; path: WisprPath; index: number; reliability?: "reliable" | "unreliable" }
+	| { type: "mapSet"; pathToMap: WisprPath; id: string; value: unknown; reliability?: "reliable" | "unreliable" }
+	| { type: "mapDelete"; pathToMap: WisprPath; id: string; reliability?: "reliable" | "unreliable" };
 
 /**
  * A patch message sent from server to client.
@@ -58,6 +62,15 @@ export interface WisprPatch {
 	readonly tokenId: WisprTokenId;
 	readonly version: number;
 	readonly operations: readonly WisprPatchOp[];
+}
+
+/**
+ * Message wrapper for state updates through reliable/unreliable remotes.
+ * Routes patches to the correct node based on tokenId.
+ */
+export interface WisprStateUpdateMessage {
+	readonly tokenId: WisprTokenId;
+	readonly patch: WisprPatch;
 }
 
 /**

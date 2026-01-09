@@ -343,6 +343,25 @@ Planned features and improvements for future releases:
 
 ## Changelog
 
+### [1.0.38] - 2026-01-06
+- **Added**: Reliable and Unreliable networking for optimized bandwidth usage
+  - `UnreliableRemoteEvent` support for high-frequency updates (positions, animations)
+  - `RemoteEvent` for guaranteed delivery of critical updates (inventory, quest completion)
+  - Operations now accept optional `reliability: "reliable" | "unreliable"` field
+- **Added**: New streamlined Node API for server-side mutations
+  - `node.set(path, value, reliability?)` - Set a value
+  - `node.increment(path, delta, reliability?)` - Increment a numeric value
+  - `node.delete(path, reliability?)` - Delete a value
+  - `node.insert(path, index, value, reliability?)` - Insert into array
+  - `node.remove(path, index, reliability?)` - Remove from array
+  - Convenience methods: `setReliable()`, `setUnreliable()`, `incrementReliable()`, etc.
+- **Added**: Helper functions for creating operations with explicit reliability
+  - `opSetReliable()` / `opSetUnreliable()`
+  - `opIncrementReliable()` / `opIncrementUnreliable()`
+- **Changed**: `patchNode()` now supports reliability field in operations (backward compatible)
+- **Added**: `getUnreliableRemoteEvent()` function for creating UnreliableRemoteEvent instances
+- **Note**: New remotes: `STATE_UPDATES_RELIABLE` and `STATE_UPDATES_UNRELIABLE`
+
 ### [1.0.35] - 2025-01-05
 - **Disabled**: Blink integration has been temporarily disabled due to compatibility issues. The `configureBlink()` function remains for API compatibility but will not enable Blink integration. Wispr will always use standard RemoteFunction/RemoteEvent.
 

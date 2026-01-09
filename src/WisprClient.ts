@@ -15,10 +15,10 @@
  */
 
 // import { Players } from "@rbxts/services";
-import type { WisprMessage, WisprCreateMessage, WisprDestroyMessage, WisprPatch } from "./WisprTypes";
+import type { WisprMessage, WisprCreateMessage, WisprDestroyMessage, WisprPatch, WisprStateUpdateMessage } from "./WisprTypes";
 import { WisprToken } from "./WisprToken";
 import { WisprNode } from "./WisprNode";
-import { getRemoteFunction, getRemoteEvent, WISPR_REMOTES } from "./WisprRemotes";
+import { getRemoteFunction, getRemoteEvent, getUnreliableRemoteEvent, WISPR_REMOTES } from "./WisprRemotes";
 
 /**
  * Global client registry for Wispr nodes.
@@ -27,12 +27,14 @@ class WisprClientRegistry {
 	private readonly nodes = new Map<string, WisprNode>();
 	private readonly nodeWaiters = new Map<string, Array<(node: WisprNode) => void>>();
 	private readonly patternListeners = new Map<string, Array<(node: WisprNode) => void>>();
-	private readonly stateUpdateRemote: RemoteEvent;
+	private readonly stateUpdateRemoteReliable: RemoteEvent;
+	private readonly stateUpdateRemoteUnreliable: UnreliableRemoteEvent;
 	private isInitialized = false;
 
 	constructor() {
-		this.stateUpdateRemote = getRemoteEvent(WISPR_REMOTES.STATE_UPDATES);
-		this.setupMessageHandler();
+		this.stateUpdateRemoteReliable = getRemoteEvent(WISPR_REMOTES.STATE_UPDATES_RELIABLE);
+		this.stateUpdateRemoteUnreliable = getUnreliableRemoteEvent(WISPR_REMOTES.STATE_UPDATES_UNRELIABLE);
+		this.setupMessageHandlers();
 	}
 
 	/**
@@ -328,17 +330,82 @@ class WisprClientRegistry {
 	}
 
 	/**
-	 * Setup handler for ongoing state updates.
+	 * Handle incoming state updates from server (patches, creates, destroys).
+	 * Wraps the message to handle both old-style direct messages and new-style wrapped messages.
 	 */
-	private setupMessageHandler(): void {
-		if (!this.stateUpdateRemote) {
-			error("[WisprClient] Failed to get state update remote");
+	private handleStateUpdate(message: unknown): void {
+		if (!message || typeOf(message) !== "table") {
+			error("[WisprClient] State update message cannot be nil and must be a table");
 		}
-		this.stateUpdateRemote.OnClientEvent.Connect((message: WisprMessage) => {
+
+		// Check if it's a wrapped message with tokenId and patch/snapshot
+		const msg = message as Record<string, unknown>;
+		if ("tokenId" in msg && typeOf(msg.tokenId) === "string") {
+			// New-style wrapped message with patch
+			if ("patch" in msg && typeOf(msg.patch) === "table") {
+				const patch = msg.patch as WisprPatch;
+				try {
+					this.handlePatch(patch);
+				} catch (err) {
+					warn(`[WisprClient] Error processing patch: ${err}`);
+				}
+				return;
+			}
+			// Old-style direct create message
+			if ("snapshot" in msg && typeOf(msg.snapshot) === "table") {
+				try {
+					this.handleMessage(message as WisprMessage);
+				} catch (err) {
+					warn(`[WisprClient] Error processing create message: ${err}`);
+				}
+				return;
+			}
+			// Destroy message
+			if (!("patch" in msg) && !("snapshot" in msg) && !("version" in msg)) {
+				try {
+					this.handleMessage(message as WisprMessage);
+				} catch (err) {
+					warn(`[WisprClient] Error processing destroy message: ${err}`);
+				}
+				return;
+			}
+		}
+
+		// Fallback to direct message handling
+		try {
+			this.handleMessage(message as WisprMessage);
+		} catch (err) {
+			warn(`[WisprClient] Error processing message: ${err}`);
+		}
+	}
+
+	private setupMessageHandlers(): void {
+		if (!this.stateUpdateRemoteReliable) {
+			error("[WisprClient] Failed to get reliable state update remote");
+		}
+		if (!this.stateUpdateRemoteUnreliable) {
+			error("[WisprClient] Failed to get unreliable state update remote");
+		}
+
+		// Listen on reliable remote
+		this.stateUpdateRemoteReliable.OnClientEvent.Connect((message: WisprStateUpdateMessage) => {
 			try {
-				this.handleMessage(message);
+				this.handleStateUpdate(message);
 			} catch (err) {
-				warn(`[WisprClient] Error handling message: ${err}`);
+				warn(`[WisprClient] Error handling reliable message: ${err}`);
+			}
+		});
+
+		// Listen on unreliable remote - skip outdated patches
+		this.stateUpdateRemoteUnreliable.OnClientEvent.Connect((message: WisprStateUpdateMessage) => {
+			try {
+				const node = this.nodes.get(message.tokenId);
+				// Only process if this is a newer patch than what we have
+				if (!node || message.patch.version >= node.getVersion()) {
+					this.handleStateUpdate(message);
+				}
+			} catch (err) {
+				warn(`[WisprClient] Error handling unreliable message: ${err}`);
 			}
 		});
 	}

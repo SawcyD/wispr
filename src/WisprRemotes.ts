@@ -21,10 +21,18 @@ export const WISPR_REMOTES = {
 	REQUEST_INITIAL_DATA: "WisprRequestInitialData",
 
 	/**
-	 * RemoteEvent for receiving state updates from server.
-	 * Server sends: create, patch, destroy messages.
+	 * RemoteEvent for receiving reliable state updates from server.
+	 * Server sends: patches that must be guaranteed delivery.
+	 * Message format: { tokenId: string, patch: WisprPatch }
 	 */
-	STATE_UPDATES: "WisprStateUpdates",
+	STATE_UPDATES_RELIABLE: "WisprStateUpdatesReliable",
+
+	/**
+	 * UnreliableRemoteEvent for receiving unreliable state updates from server.
+	 * Server sends: patches that can be dropped (only latest value matters).
+	 * Message format: { tokenId: string, patch: WisprPatch }
+	 */
+	STATE_UPDATES_UNRELIABLE: "WisprStateUpdatesUnreliable",
 } as const;
 
 /**
@@ -50,7 +58,7 @@ export function getRemoteFunction(name: string): RemoteFunction {
 			const blinkName = getBlinkRemoteName(name);
 			const blinkRemote = blinkModule[blinkName];
 
-			if (blinkRemote) {
+			if (blinkRemote !== undefined) {
 				return blinkRemote as RemoteFunction;
 			} else {
 				warn(
@@ -106,7 +114,7 @@ export function getRemoteEvent(name: string): RemoteEvent {
 			const blinkName = getBlinkRemoteName(name);
 			const blinkRemote = blinkModule[blinkName];
 
-			if (blinkRemote) {
+			if (blinkRemote !== undefined) {
 				return blinkRemote as RemoteEvent;
 			} else {
 				warn(
@@ -138,6 +146,60 @@ export function getRemoteEvent(name: string): RemoteEvent {
 }
 
 /**
+ * Get or create an UnreliableRemoteEvent by name.
+ * If Blink is enabled, uses Blink-generated wrapper.
+ *
+ * @param name - Name of the unreliable remote event
+ * @returns The UnreliableRemoteEvent instance
+ * @throws Error if name is invalid
+ */
+export function getUnreliableRemoteEvent(name: string): UnreliableRemoteEvent {
+	if (typeOf(name) !== "string" || name === "") {
+		error("[WisprRemotes] Unreliable remote event name must be a non-empty string");
+	}
+
+	// Try Blink integration if enabled
+	if (isBlinkEnabled()) {
+		const config = getBlinkConfig();
+		const runService = game.GetService("RunService");
+		const blinkModule = runService.IsServer() ? config.serverBlinkModule : config.clientBlinkModule;
+
+		if (blinkModule) {
+			const blinkName = getBlinkRemoteName(name);
+			const blinkRemote = blinkModule[blinkName];
+
+			if (blinkRemote !== undefined) {
+				return blinkRemote as UnreliableRemoteEvent;
+			} else {
+				warn(
+					`[WisprRemotes] Blink unreliable remote event "${blinkName}" not found in module. Falling back to standard UnreliableRemoteEvent.`,
+				);
+			}
+		}
+	}
+
+	// Fallback to standard UnreliableRemoteEvent
+	const replicatedStorage = game.GetService("ReplicatedStorage");
+	if (!replicatedStorage) {
+		error("[WisprRemotes] Failed to get ReplicatedStorage service");
+	}
+
+	let remote = replicatedStorage.FindFirstChild(name) as UnreliableRemoteEvent | undefined;
+
+	if (!remote) {
+		remote = new Instance("UnreliableRemoteEvent");
+		remote.Name = name;
+		remote.Parent = replicatedStorage;
+	}
+
+	if (!remote) {
+		error(`[WisprRemotes] Failed to create UnreliableRemoteEvent: ${name}`);
+	}
+
+	return remote;
+}
+
+/**
  * Initialize Wispr remotes (creates them if they don't exist).
  * Should be called once on server startup.
  */
@@ -145,6 +207,7 @@ export function initializeRemotes(): void {
 	const runService = game.GetService("RunService");
 	if (runService.IsServer()) {
 		getRemoteFunction(WISPR_REMOTES.REQUEST_INITIAL_DATA);
-		getRemoteEvent(WISPR_REMOTES.STATE_UPDATES);
+		getRemoteEvent(WISPR_REMOTES.STATE_UPDATES_RELIABLE);
+		getUnreliableRemoteEvent(WISPR_REMOTES.STATE_UPDATES_UNRELIABLE);
 	}
 }

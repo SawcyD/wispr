@@ -50,6 +50,7 @@ export type {
 	WisprChangeCallback,
 	WisprAnyChangeCallback,
 	WisprRawPatchCallback,
+	WisprStateUpdateMessage,
 } from "./WisprTypes";
 
 // Token system
@@ -62,7 +63,7 @@ export { pathOf, isValidPath, getValueAtPath, setValueAtPath, deleteValueAtPath 
 export { applyPatch, applyPatchOperation } from "./WisprPatch";
 
 // Remotes
-export { getRemoteFunction, getRemoteEvent, WISPR_REMOTES, initializeRemotes } from "./WisprRemotes";
+export { getRemoteFunction, getRemoteEvent, getUnreliableRemoteEvent, WISPR_REMOTES, initializeRemotes } from "./WisprRemotes";
 
 // Blink integration
 export { configureBlink } from "./WisprBlinkConfig";
@@ -70,7 +71,7 @@ export type { WisprBlinkConfig, BlinkCasing } from "./WisprBlinkConfig";
 
 // Client API
 export { WisprNode } from "./WisprNode";
-export { requestInitialData, waitForNode, getNode as getClientNode } from "./WisprClient";
+export { requestInitialData, waitForNode, getNode as getClientNode, onNodeOfClassCreated } from "./WisprClient";
 
 // Server API
 export {
@@ -229,4 +230,74 @@ export function opMapDelete(pathToMap: WisprPath, id: string): WisprPatchOp {
 		error("[Wispr] opMapDelete: id must be a non-empty string");
 	}
 	return { type: "mapDelete", pathToMap, id };
+}
+
+/**
+ * Create a "set" patch operation (unreliable - best effort delivery).
+ * Use for frequent updates where only the latest value matters (e.g., positions).
+ *
+ * @param path - Path to set
+ * @param value - Value to set
+ * @returns Unreliable patch operation
+ * @throws Error if path is invalid
+ */
+export function opSetUnreliable(path: WisprPath, value: unknown): WisprPatchOp {
+	if (!isValidPath(path)) {
+		error("[Wispr] opSetUnreliable: path must be a non-empty array of strings or numbers");
+	}
+	return { type: "set", path, value, reliability: "unreliable" };
+}
+
+/**
+ * Create a "set" patch operation (reliable - guaranteed delivery).
+ * Use for important updates that must not be lost (e.g., inventory changes).
+ *
+ * @param path - Path to set
+ * @param value - Value to set
+ * @returns Reliable patch operation
+ * @throws Error if path is invalid
+ */
+export function opSetReliable(path: WisprPath, value: unknown): WisprPatchOp {
+	if (!isValidPath(path)) {
+		error("[Wispr] opSetReliable: path must be a non-empty array of strings or numbers");
+	}
+	return { type: "set", path, value, reliability: "reliable" };
+}
+
+/**
+ * Create an "increment" patch operation (unreliable).
+ * Use for frequent updates where only the latest value matters.
+ *
+ * @param path - Path to increment
+ * @param delta - Amount to increment by
+ * @returns Unreliable patch operation
+ * @throws Error if path or delta is invalid
+ */
+export function opIncrementUnreliable(path: WisprPath, delta: number): WisprPatchOp {
+	if (!isValidPath(path)) {
+		error("[Wispr] opIncrementUnreliable: path must be a non-empty array of strings or numbers");
+	}
+	if (typeOf(delta) !== "number") {
+		error("[Wispr] opIncrementUnreliable: delta must be a number");
+	}
+	return { type: "increment", path, delta, reliability: "unreliable" };
+}
+
+/**
+ * Create an "increment" patch operation (reliable).
+ * Use for important updates that must not be lost.
+ *
+ * @param path - Path to increment
+ * @param delta - Amount to increment by
+ * @returns Reliable patch operation
+ * @throws Error if path or delta is invalid
+ */
+export function opIncrementReliable(path: WisprPath, delta: number): WisprPatchOp {
+	if (!isValidPath(path)) {
+		error("[Wispr] opIncrementReliable: path must be a non-empty array of strings or numbers");
+	}
+	if (typeOf(delta) !== "number") {
+		error("[Wispr] opIncrementReliable: delta must be a number");
+	}
+	return { type: "increment", path, delta, reliability: "reliable" };
 }

@@ -22,9 +22,10 @@ import type {
 	WisprCreateMessage,
 	WisprDestroyMessage,
 	WisprPatch,
+	WisprPath,
 } from "./WisprTypes";
 import { WisprToken } from "./WisprToken";
-import { getRemoteFunction, getRemoteEvent, WISPR_REMOTES } from "./WisprRemotes";
+import { getRemoteFunction, getRemoteEvent, getUnreliableRemoteEvent, WISPR_REMOTES } from "./WisprRemotes";
 import { WisprRateLimiter } from "./WisprRateLimiter";
 import { applyPatchOperation } from "./WisprPatch";
 
@@ -139,6 +140,180 @@ export class WisprServerNode<T = unknown> {
 		}
 		return false;
 	}
+
+	/**
+	 * Set a value at a path.
+	 *
+	 * @param path - Path to set
+	 * @param value - Value to set
+	 * @param reliability - "reliable" (default) or "unreliable"
+	 */
+	public set(path: WisprPath, value: unknown, reliability: "reliable" | "unreliable" = "reliable"): void {
+		if (!path || !typeIs(path, "table")) {
+			error("[WisprServerNode] Path must be a table");
+		}
+		this.applyOperation({
+			type: "set",
+			path: path as WisprPath,
+			value,
+			reliability,
+		});
+	}
+
+	/**
+	 * Set a value at a path (reliable, guaranteed delivery).
+	 */
+	public setReliable(path: WisprPath, value: unknown): void {
+		this.set(path, value, "reliable");
+	}
+
+	/**
+	 * Set a value at a path (unreliable, best effort).
+	 */
+	public setUnreliable(path: WisprPath, value: unknown): void {
+		this.set(path, value, "unreliable");
+	}
+
+	/**
+	 * Increment a numeric value at a path.
+	 *
+	 * @param path - Path to increment
+	 * @param delta - Amount to increment by
+	 * @param reliability - "reliable" (default) or "unreliable"
+	 */
+	public increment(path: WisprPath, delta: number, reliability: "reliable" | "unreliable" = "reliable"): void {
+		if (!path || !typeIs(path, "table")) {
+			error("[WisprServerNode] Path must be a table");
+		}
+		if (typeOf(delta) !== "number") {
+			error("[WisprServerNode] Delta must be a number");
+		}
+		this.applyOperation({
+			type: "increment",
+			path: path as WisprPath,
+			delta,
+			reliability,
+		});
+	}
+
+	/**
+	 * Increment a numeric value (reliable, guaranteed delivery).
+	 */
+	public incrementReliable(path: WisprPath, delta: number): void {
+		this.increment(path, delta, "reliable");
+	}
+
+	/**
+	 * Increment a numeric value (unreliable, best effort).
+	 */
+	public incrementUnreliable(path: WisprPath, delta: number): void {
+		this.increment(path, delta, "unreliable");
+	}
+
+	/**
+	 * Delete a value at a path.
+	 *
+	 * @param path - Path to delete
+	 * @param reliability - "reliable" (default) or "unreliable"
+	 */
+	public delete(path: WisprPath, reliability: "reliable" | "unreliable" = "reliable"): void {
+		if (!path || !typeIs(path, "table")) {
+			error("[WisprServerNode] Path must be a table");
+		}
+		this.applyOperation({
+			type: "delete",
+			path: path as WisprPath,
+			reliability,
+		});
+	}
+
+	/**
+	 * Delete a value (reliable, guaranteed delivery).
+	 */
+	public deleteReliable(path: WisprPath): void {
+		this.delete(path, "reliable");
+	}
+
+	/**
+	 * Delete a value (unreliable, best effort).
+	 */
+	public deleteUnreliable(path: WisprPath): void {
+		this.delete(path, "unreliable");
+	}
+
+	/**
+	 * Insert a value into an array at a specific index.
+	 *
+	 * @param path - Path to the array
+	 * @param index - Index to insert at
+	 * @param value - Value to insert
+	 * @param reliability - "reliable" (default) or "unreliable"
+	 */
+	public insert(path: WisprPath, index: number, value: unknown, reliability: "reliable" | "unreliable" = "reliable"): void {
+		if (!path || !typeIs(path, "table")) {
+			error("[WisprServerNode] Path must be a table");
+		}
+		if (typeOf(index) !== "number") {
+			error("[WisprServerNode] Index must be a number");
+		}
+		this.applyOperation({
+			type: "listInsert",
+			path: path as WisprPath,
+			index,
+			value,
+			reliability,
+		});
+	}
+
+	/**
+	 * Insert a value into an array (reliable, guaranteed delivery).
+	 */
+	public insertReliable(path: WisprPath, index: number, value: unknown): void {
+		this.insert(path, index, value, "reliable");
+	}
+
+	/**
+	 * Insert a value into an array (unreliable, best effort).
+	 */
+	public insertUnreliable(path: WisprPath, index: number, value: unknown): void {
+		this.insert(path, index, value, "unreliable");
+	}
+
+	/**
+	 * Remove a value from an array at a specific index.
+	 *
+	 * @param path - Path to the array
+	 * @param index - Index to remove
+	 * @param reliability - "reliable" (default) or "unreliable"
+	 */
+	public remove(path: WisprPath, index: number, reliability: "reliable" | "unreliable" = "reliable"): void {
+		if (!path || !typeIs(path, "table")) {
+			error("[WisprServerNode] Path must be a table");
+		}
+		if (typeOf(index) !== "number") {
+			error("[WisprServerNode] Index must be a number");
+		}
+		this.applyOperation({
+			type: "listRemoveAt",
+			path: path as WisprPath,
+			index,
+			reliability,
+		});
+	}
+
+	/**
+	 * Remove a value from an array (reliable, guaranteed delivery).
+	 */
+	public removeReliable(path: WisprPath, index: number): void {
+		this.remove(path, index, "reliable");
+	}
+
+	/**
+	 * Remove a value from an array (unreliable, best effort).
+	 */
+	public removeUnreliable(path: WisprPath, index: number): void {
+		this.remove(path, index, "unreliable");
+	}
 }
 
 /**
@@ -146,12 +321,14 @@ export class WisprServerNode<T = unknown> {
  */
 class WisprServerRegistry {
 	private readonly nodes = new Map<string, WisprServerNode>();
-	private readonly stateUpdateRemote: RemoteEvent;
+	private readonly stateUpdateRemoteReliable: RemoteEvent;
+	private readonly stateUpdateRemoteUnreliable: UnreliableRemoteEvent;
 	private readonly requestRemote: RemoteFunction;
 	private readonly rateLimiter = new WisprRateLimiter(5, 10); // 5 requests per 10 seconds
 
 	constructor() {
-		this.stateUpdateRemote = getRemoteEvent(WISPR_REMOTES.STATE_UPDATES);
+		this.stateUpdateRemoteReliable = getRemoteEvent(WISPR_REMOTES.STATE_UPDATES_RELIABLE);
+		this.stateUpdateRemoteUnreliable = getUnreliableRemoteEvent(WISPR_REMOTES.STATE_UPDATES_UNRELIABLE);
 		this.requestRemote = getRemoteFunction(WISPR_REMOTES.REQUEST_INITIAL_DATA);
 		this.setupRequestHandler();
 	}
@@ -322,28 +499,51 @@ class WisprServerRegistry {
 			snapshot: node.createSnapshot(),
 		};
 
+		// Send create messages on reliable remote
 		if (node.scope.kind === "all") {
-			this.stateUpdateRemote.FireAllClients(message);
+			this.stateUpdateRemoteReliable.FireAllClients(message);
 		} else if (node.scope.kind === "player") {
-			this.stateUpdateRemote.FireClient(node.scope.player, message);
+			this.stateUpdateRemoteReliable.FireClient(node.scope.player, message);
 		} else if (node.scope.kind === "players") {
 			for (const player of node.scope.players) {
-				this.stateUpdateRemote.FireClient(player, message);
+				this.stateUpdateRemoteReliable.FireClient(player, message);
 			}
 		}
 	}
 
 	/**
 	 * Broadcast patch to relevant clients.
+	 * Routes to reliable or unreliable remote based on the operation's reliability field.
 	 */
 	private broadcastPatch(node: WisprServerNode, patch: WisprPatch): void {
-		if (node.scope.kind === "all") {
-			this.stateUpdateRemote.FireAllClients(patch);
-		} else if (node.scope.kind === "player") {
-			this.stateUpdateRemote.FireClient(node.scope.player, patch);
-		} else if (node.scope.kind === "players") {
-			for (const player of node.scope.players) {
-				this.stateUpdateRemote.FireClient(player, patch);
+		// Determine reliability from first operation (all ops in a patch should have same reliability)
+		const reliability = (patch.operations[0] as WisprPatchOp & { reliability?: string }).reliability ?? "reliable";
+
+		// Create message wrapper with tokenId for routing
+		const message = {
+			tokenId: patch.tokenId,
+			patch,
+		};
+
+		if (reliability === "reliable") {
+			if (node.scope.kind === "all") {
+				this.stateUpdateRemoteReliable.FireAllClients(message);
+			} else if (node.scope.kind === "player") {
+				this.stateUpdateRemoteReliable.FireClient(node.scope.player, message);
+			} else if (node.scope.kind === "players") {
+				for (const player of node.scope.players) {
+					this.stateUpdateRemoteReliable.FireClient(player, message);
+				}
+			}
+		} else {
+			if (node.scope.kind === "all") {
+				this.stateUpdateRemoteUnreliable.FireAllClients(message);
+			} else if (node.scope.kind === "player") {
+				this.stateUpdateRemoteUnreliable.FireClient(node.scope.player, message);
+			} else if (node.scope.kind === "players") {
+				for (const player of node.scope.players) {
+					this.stateUpdateRemoteUnreliable.FireClient(player, message);
+				}
 			}
 		}
 	}
@@ -356,14 +556,14 @@ class WisprServerRegistry {
 			tokenId: token.id,
 		};
 
-		// Broadcast based on scope
+		// Send destroy messages on reliable remote
 		if (scope.kind === "all") {
-			this.stateUpdateRemote.FireAllClients(message);
+			this.stateUpdateRemoteReliable.FireAllClients(message);
 		} else if (scope.kind === "player") {
-			this.stateUpdateRemote.FireClient(scope.player, message);
+			this.stateUpdateRemoteReliable.FireClient(scope.player, message);
 		} else if (scope.kind === "players") {
 			for (const player of scope.players) {
-				this.stateUpdateRemote.FireClient(player, message);
+				this.stateUpdateRemoteReliable.FireClient(player, message);
 			}
 		}
 	}

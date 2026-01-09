@@ -63,7 +63,13 @@ export { pathOf, isValidPath, getValueAtPath, setValueAtPath, deleteValueAtPath 
 export { applyPatch, applyPatchOperation } from "./WisprPatch";
 
 // Remotes
-export { getRemoteFunction, getRemoteEvent, getUnreliableRemoteEvent, WISPR_REMOTES, initializeRemotes } from "./WisprRemotes";
+export {
+	getRemoteFunction,
+	getRemoteEvent,
+	getUnreliableRemoteEvent,
+	WISPR_REMOTES,
+	initializeRemotes,
+} from "./WisprRemotes";
 
 // Blink integration
 export { configureBlink } from "./WisprBlinkConfig";
